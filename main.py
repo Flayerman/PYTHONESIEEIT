@@ -1,142 +1,165 @@
+import tkinter as tk
+from tkinter import ttk
 from collections import Counter
 import csv
 import requests
 from bs4 import BeautifulSoup
 
-# Etape 1
-def compter_mots(texte):
-    # Diviser le texte en mots
-    mots = texte.split()
-    # Utiliser Counter pour compter l'occurrence de chaque mot
-    occurrences = Counter(mots)
-    # Trier les mots par nombre d'occurrences (en ordre décroissant)
-    mots_tries = sorted(occurrences.items(), key=lambda x: x[1], reverse=True)
-    return mots_tries
-# Etape 3
+class SEO:
+    def __init__(self, url, fichier_csv):
+        # Initialisation des variables url et fichier parasites
+        self.url = url
+        self.fichier_csv = fichier_csv
 
-def mots_csv(fichier):
-    mots_parasites = []
-    with open(fichier, 'r', newline='', encoding='utf-8') as csvfile:
-        lecteur_csv = csv.reader(csvfile)
-        for ligne in lecteur_csv:
-            mots_parasites.extend(ligne)
-    return mots_parasites
+    # Étape 1
+    def compter_mots(self, texte):
+        # Décomposition du texte en chaine de mots
+        mots = texte.split()
+        occurrences = Counter(mots)
+        # Retourne le nombre d'occurence par ordre décroissant
+        mots_tries = sorted(occurrences.items(), key=lambda x: x[1], reverse=True)
+        return mots_tries
 
-# Etape 2
+    # Étape 3
+    def mots_csv(self):
+        mots_parasites = []
+        # Récupère les mots parasites du fichier_csv et les ajoutes dans la liste mots_parasites
+        with open(self.fichier_csv, 'r', newline='', encoding='utf-8') as csvfile:
+            lecteur_csv = csv.reader(csvfile)
+            for ligne in lecteur_csv:
+                mots_parasites.extend(ligne)
+        return mots_parasites
 
-def del_parasites(mots_tries, parasites):
-    mots_filtre = [(mot, occurrence) for mot, occurrence in mots_tries if mot not in parasites]
-    return mots_filtre
+    # Étape 2
+    def del_parasites(self, mots_tries, parasites):
+        # Supprime les mots parasites dans la liste de mots_tries
+        mots_filtre = [(mot, occurrence) for mot, occurrence in mots_tries if mot not in parasites]
+        return mots_filtre
 
-# Etape 4
-def enlever_balises_html(html: str):
-    # Utiliser BeautifulSoup pour analyser le HTML
-    soup = BeautifulSoup(html, 'html.parser')
-    # Extraire le texte du HTML sans balises
-    texte_sans_balises = soup.get_text(separator=' ', strip=True)
-    return texte_sans_balises
+    # Étape 4
+    def enlever_balises_html(self, html):
+        # Extrait le code source html de l'url
+        soup = BeautifulSoup(html, 'html.parser')
+        # Extrait le texte du code source. strip retire le superflu en début de texte donc les balises
+        texte_sans_balises = soup.get_text(separator=' ', strip=True)
+        return texte_sans_balises
 
-# Etape 6
-def extraire_valeurs_attribut(html, balise, attribut):
-    valeurs = []
+    # Étape 6
+    def extraire_valeurs_attribut(self, html, balise, attribut):
+        # Extrait la ligne spécifique par rapport à la balise et l'attribut indiqué
+        valeurs = []
+        soup = BeautifulSoup(html, 'html.parser')
+        balises = soup.find_all(balise)
+        for balise in balises:
+            valeur_attribut = balise.get(attribut)
+            if valeur_attribut:
+                valeurs.append(valeur_attribut)
+        return valeurs
 
-    # Utiliser BeautifulSoup pour analyser le HTML
-    soup = BeautifulSoup(html, 'html.parser')
+    # Étape 8
+    def extraire_domaine(self, url):
+        # Utilise comme séparateur le '//' d'une url 'https://bm-cat.com'
+        try:
+            return url.split('/')[2]
+        except:
+            return url.split('/')[0]
 
-    # Trouver toutes les balises spécifiées
-    balises = soup.find_all(balise)
+    # Étape 9
+    def groupe_domain(self, domain, grp_url):
+        # Compare si le domaine est différent
+        urls_domaine = [url for url in grp_url if self.extraire_domaine(url) == domain]
+        urls_autres = [url for url in grp_url if self.extraire_domaine(url) != domain]
+        return urls_domaine, urls_autres
 
-    # Extraire les valeurs de l'attribut spécifié
-    for balise in balises:
-        valeur_attribut = balise.get(attribut)
-        if valeur_attribut:
-            valeurs.append(valeur_attribut)
-    return valeurs
+    # Étape 10
+    def recuperer_html_depuis_url(self, url):
+        response = requests.get(url)
+        return response.text
 
-# Etape 8
-def extraire_domaine(url):
-    try:
-        return url.split('/')[2]
-    except:
-        return url.split('/')[0]
+    # Étape 11
+    def analyser_referencement(self, mots_cles):
+        domain = self.extraire_domaine(self.url)
+        html = self.recuperer_html_depuis_url(self.url)
+        text = self.enlever_balises_html(html)
+        words = self.compter_mots(text)
+        words_parasite = self.mots_csv()
+        words_filtre = self.del_parasites(words, words_parasite)
+        premiers_mots = words_filtre[:4]
 
-# Etape 9
-def groupe_domain(domain,grp_url):
-    urls_domaine = [url for url in grp_url if extraire_domaine(url) == domain]
-    urls_autres = [url for url in grp_url if extraire_domaine(url) != domain]
-    return urls_domaine, urls_autres
+        # Nombre de balise alt
+        images = self.extraire_valeurs_attribut(html, 'img', 'alt')
 
-# Etape 10
-def recuperer_html_depuis_url(url):
-    response = requests.get(url)
-    return response.text
+        # Liens entrants et sortants
+        liens = self.extraire_valeurs_attribut(html, 'a', 'href')
+        liens_traite = self.groupe_domain(domain, liens)
 
-# Etape 11
-def prince():
-    url = "https://www.bm-cat.com/fr-fr/"
-    domain = extraire_domaine(url)
-    print(domain)
-    html = recuperer_html_depuis_url(url)
-    text = enlever_balises_html(html)
-    words = compter_mots(text)
-    fichier_csv = "parasite.csv"
-    words_parasite = mots_csv(fichier_csv)
-    words_filtre = del_parasites(words,words_parasite)
-    premiers_mots = words_filtre[:4]
-    print("Les 4 premiers mots sont : ", premiers_mots)
-    # Images
-    image = extraire_valeurs_attribut(html,'img','alt')
-    print(f"Il y a {len(image)} images")
-    print(image)
-    # Liens entrants / sortants
-    liens = extraire_valeurs_attribut(html,'a','href')
-    liens_traite = groupe_domain(domain,liens)
-    print(f"Il y a {len(liens_traite[0])} de liens entrants")
-    print(f"Il y a {len(liens_traite[1])} de liens sortants ou incomplets")
+        # Vérifie si le mot-clé recherché est présent dans la liste words_filtre
+        mots_cles_present = any(mot.lower() in [mot[0].lower() for mot in words_filtre] for mot in mots_cles)
 
-    return
+        return {
+            "domaine": domain,
+            "premiers_mots": premiers_mots,
+            "nombre_images": len(images),
+            "liens_entrants": len(liens_traite[0]),
+            "liens_sortants": len(liens_traite[1]),
+            "mots_cles_present": mots_cles_present
+        }
 
+class IHMSEO:
+    def __init__(self, fenetre):
+        self.fenetre = fenetre
+        self.fenetre.title("Analyse de Référencement")
 
-print(prince())
+        # Création des étiquettes et des champs de saisie
+        self.url_label = tk.Label(fenetre, text="URL de la première page :")
+        self.url_entry = tk.Entry(fenetre, width=30)
 
+        self.mots_cles_label = tk.Label(fenetre, text="Mot-clé :")
+        self.mots_cles_entry = tk.Entry(fenetre, width=30)
 
+        # Création d'un bouton pour l'analyse de référencement
+        self.analyser_bouton = tk.Button(fenetre, text="Analyser", command=self.afficher_resultats)
 
+        # Placement des widgets dans la fenêtre
+        self.url_label.pack(pady=5)
+        self.url_entry.pack(pady=5)
 
+        self.mots_cles_label.pack(pady=5)
+        self.mots_cles_entry.pack(pady=5)
 
+        self.analyser_bouton.pack(pady=10)
 
+    # Fonction pour afficher les résultats dans une nouvelle fenêtre
+    def afficher_resultats(self):
+        url = self.url_entry.get()
+        mots_cles = self.mots_cles_entry.get().split(',')
 
+        analyseur = SEO(url=url, fichier_csv="parasite.csv")
+        resultats = analyseur.analyser_referencement(mots_cles)
 
+        # Création de la nouvelle fenêtre
+        resultat_fenetre = tk.Toplevel(self.fenetre)
+        resultat_fenetre.title("Résultats de l'analyse de référencement")
 
+        # Affichage des résultats dans un Treeview
+        tree = ttk.Treeview(resultat_fenetre, columns=("Valeur"))
+        tree.heading("#0", text="Information")
+        tree.heading("Valeur", text="Valeur")
 
-# Exemple d'utilisation
-#texte_exemple = "Ceci est un yohan de texte. Un yohan pour tester la fonction."
-#fichier = "parasite.csv"
+        # Insertion des résultats dans le Treeview
+        tree.insert("", "end", text="Domaine", values=(resultats["domaine"],))
+        tree.insert("", "end", text="Premiers mots", values=(resultats["premiers_mots"],))
+        tree.insert("", "end", text="Nombre d'images", values=(resultats["nombre_images"],))
+        tree.insert("", "end", text="Liens entrants", values=(resultats["liens_entrants"],))
+        tree.insert("", "end", text="Liens sortants", values=(resultats["liens_sortants"],))
+        tree.insert("", "end", text="Mots-clés présents", values=(resultats["mots_cles_present"],))
 
-#html_exemple = "<p>Ceci est un <b>exemple</b> de texte HTML.</p>"
-#texte_sans_balises = enlever_balises_html(html_exemple)
+        # Placement du Treeview dans la nouvelle fenêtre
+        tree.pack(expand=True, fill=tk.BOTH)
 
-#Liste = compter_mots(texte_exemple)
-#fichier_parasite = mots_csv(fichier)
-#resultat = del_parasites(Liste, fichier_parasite)
-#print(resultat)
+# Création de la fenêtre principale
+fenetre_principale = tk.Tk()
+app = IHMSEO(fenetre_principale)
 
- #Exemple d'utilisation etape 5
-#html_exemple = """
-#<html>
-#  <body>
-#    <a href="lien1">Lien 1</a>
-#    <a href="lien2">Lien 2</a>
-#    <a href="lien3">Lien 3</a>
-#  </body>
-#</html>
-#"""
-#Etape 6
-#balise_exemple = "a"
-#attribut_exemple = "href"
-#valeurs_attribut = extraire_valeurs_attribut(html_exemple, balise_exemple, attribut_exemple)
-#print("Valeurs de l'attribut '{}':".format(attribut_exemple))
-#print(valeurs_attribut)
-
-#Etape 8
-#exemple_url = "https://antoine-engasser.fr"
-#print(extraire_domaine(exemple_url))
+# Lancement de la boucle principale
+fenetre_principale.mainloop()
